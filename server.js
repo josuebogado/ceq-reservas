@@ -8,7 +8,7 @@ const PORT = process.env.PORT || 3000;
 
 // Configuración Supabase
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://xftcenmlptzhxhffwtsk.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_KEY;
+const SUPABASE_KEY = process.env.SUPABASE_KEY || 'sb_secret_GowxJgT7b0E_ApXz2AtUJw_PIpjgVCh';
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // Middleware
@@ -90,10 +90,10 @@ app.post('/api/validar-disponibilidad', async (req, res) => {
 // Crear nueva reserva
 app.post('/api/reservas', async (req, res) => {
   try {
-    const { espacio_id, nombre_solicitante, contacto, fecha, hora_inicio, motivo } = req.body;
+    const { espacio_id, nombre_solicitante, contacto, fecha, hora_inicio, hora_fin, motivo } = req.body;
 
     // Validaciones
-    if (!espacio_id || !nombre_solicitante || !contacto || !fecha || !hora_inicio) {
+    if (!espacio_id || !nombre_solicitante || !contacto || !fecha || !hora_inicio || !hora_fin) {
       return res.status(400).json({ error: 'Faltan datos obligatorios' });
     }
 
@@ -118,21 +118,32 @@ app.post('/api/reservas', async (req, res) => {
       return res.status(400).json({ error: 'El horario debe estar entre 08:00 y 17:00' });
     }
 
-    // Calcular hora final (1 hora después de la hora de inicio)
-    // El frontend envía solo hora_inicio, backend suma 1 hora
-    const horaFin = String(hora + 1).padStart(2, '0') + ':' + String(minuto).padStart(2, '0');
-
-    // Verificar disponibilidad
-    const { data: conflicto } = await supabase
+    // Verificar disponibilidad: que no haya solapamiento con reservas existentes
+    const { data: conflictos } = await supabase
       .from('reservas')
-      .select('id')
+      .select('id, hora_inicio, hora_fin')
       .eq('espacio_id', espacio_id)
       .eq('fecha', fecha)
-      .eq('hora_inicio', hora_inicio)
       .eq('estado', 'activa');
 
-    if (conflicto && conflicto.length > 0) {
-      return res.status(400).json({ error: 'Este horario ya está reservado' });
+    if (conflictos && conflictos.length > 0) {
+      // Verificar si se solapa con alguna reserva existente
+      const [horaIni, minIni] = hora_inicio.split(':').map(Number);
+      const [horaFin, minFin] = hora_fin.split(':').map(Number);
+      const tiempoInicio = horaIni * 60 + minIni;
+      const tiempoFin = horaFin * 60 + minFin;
+
+      for (const conflicto of conflictos) {
+        const [horaExist, minExist] = conflicto.hora_inicio.split(':').map(Number);
+        const [horaExistFin, minExistFin] = conflicto.hora_fin.split(':').map(Number);
+        const tiempoExist = horaExist * 60 + minExist;
+        const tiempoExistFin = horaExistFin * 60 + minExistFin;
+
+        // Verificar solapamiento
+        if (tiempoInicio < tiempoExistFin && tiempoFin > tiempoExist) {
+          return res.status(400).json({ error: 'Este horario se solapa con una reserva existente' });
+        }
+      }
     }
 
     // Insertar la reserva
@@ -144,7 +155,7 @@ app.post('/api/reservas', async (req, res) => {
         contacto,
         fecha,
         hora_inicio,
-        hora_fin: horaFin,
+        hora_fin,
         motivo: motivo || '',
         estado: 'activa'
       }])
