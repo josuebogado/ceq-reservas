@@ -8,7 +8,7 @@ const PORT = process.env.PORT || 3000;
 
 // Configuración Supabase
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://xftcenmlptzhxhffwtsk.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_KEY || 'sb_secret_GowxJgT7b0E_ApXz2AtUJw_PIpjgVCh';
+const SUPABASE_KEY = process.env.SUPABASE_KEY;
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // Middleware
