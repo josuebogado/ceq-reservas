@@ -90,7 +90,7 @@ app.post('/api/validar-disponibilidad', async (req, res) => {
 // Crear nueva reserva
 app.post('/api/reservas', async (req, res) => {
   try {
-    const { espacio_id, nombre_solicitante, contacto, fecha, hora_inicio } = req.body;
+    const { espacio_id, nombre_solicitante, contacto, fecha, hora_inicio, motivo } = req.body;
 
     // Validaciones
     if (!espacio_id || !nombre_solicitante || !contacto || !fecha || !hora_inicio) {
@@ -118,7 +118,8 @@ app.post('/api/reservas', async (req, res) => {
       return res.status(400).json({ error: 'El horario debe estar entre 08:00 y 17:00' });
     }
 
-    // Calcular hora final (1 hora después)
+    // Calcular hora final (1 hora después de la hora de inicio)
+    // El frontend envía solo hora_inicio, backend suma 1 hora
     const horaFin = String(hora + 1).padStart(2, '0') + ':' + String(minuto).padStart(2, '0');
 
     // Verificar disponibilidad
@@ -144,6 +145,7 @@ app.post('/api/reservas', async (req, res) => {
         fecha,
         hora_inicio,
         hora_fin: horaFin,
+        motivo: motivo || '',
         estado: 'activa'
       }])
       .select();
