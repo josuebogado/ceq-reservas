@@ -92,6 +92,8 @@ app.post('/api/reservas', async (req, res) => {
   try {
     const { espacio_id, nombre_solicitante, contacto, fecha, hora_inicio, hora_fin, motivo } = req.body;
 
+    console.log('Datos recibidos:', { espacio_id, nombre_solicitante, contacto, fecha, hora_inicio, hora_fin, motivo });
+
     // Validaciones
     if (!espacio_id || !nombre_solicitante || !contacto || !fecha || !hora_inicio || !hora_fin) {
       return res.status(400).json({ error: 'Faltan datos obligatorios' });
