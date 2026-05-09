@@ -2,6 +2,17 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
+const sgMail = require('@sendgrid/mail');
+
+// Configurar SendGrid
+if (process.env.SENDGRID_API_KEY) {
+  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+}
+
+// Generar código único
+function generarCodigo() {
+  return 'RES-' + Math.random().toString(36).substring(2, 8).toUpperCase();
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -149,6 +160,7 @@ app.post('/api/reservas', async (req, res) => {
     }
 
     // Insertar la reserva
+    const codigo = generarCodigo();
     const { data: nuevaReserva, error } = await supabase
       .from('reservas')
       .insert([{
@@ -159,11 +171,59 @@ app.post('/api/reservas', async (req, res) => {
         hora_inicio,
         hora_fin,
         motivo: motivo || '',
-        estado: 'activa'
+        estado: 'activa',
+        codigo_cancelacion: codigo
       }])
       .select();
 
     if (error) throw error;
+
+    // Enviar email con detalles de la reserva
+    const [emailUser] = contacto.split('|').map(c => c.trim());
+    const espacios_map = { 1: 'Altillo', 2: 'Sala de Reuniones', 3: 'Frente' };
+    
+    if (sgMail && process.env.SENDGRID_API_KEY) {
+      try {
+        await sgMail.send({
+          to: emailUser,
+          from: 'reservas@ceq-una.com.ar', // Cambiar según tu dominio
+          subject: '✓ Tu reserva en Centro de Estudiantes de Química',
+          html: `
+            <h2>Reserva Confirmada</h2>
+            <p>Hola <strong>${nombre_solicitante}</strong>,</p>
+            <p>Tu reserva ha sido registrada exitosamente:</p>
+            <hr>
+            <table style="border-collapse: collapse;">
+              <tr>
+                <td style="padding: 8px;"><strong>Espacio:</strong></td>
+                <td style="padding: 8px;">${espacios_map[espacio_id]}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px;"><strong>Fecha:</strong></td>
+                <td style="padding: 8px;">${new Date(fecha).toLocaleDateString('es-PY')}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px;"><strong>Horario:</strong></td>
+                <td style="padding: 8px;">${hora_inicio} - ${hora_fin}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px;"><strong>Motivo:</strong></td>
+                <td style="padding: 8px;">${motivo || 'Sin especificar'}</td>
+              </tr>
+              <tr style="background: #f0f0f0;">
+                <td style="padding: 8px;"><strong>Código de Cancelación:</strong></td>
+                <td style="padding: 8px; font-weight: bold; color: #d86060;">${codigo}</td>
+              </tr>
+            </table>
+            <hr>
+            <p><small>Guarda este código si deseas cancelar tu reserva.</small></p>
+          `
+        });
+      } catch (emailError) {
+        console.error('Error al enviar email:', emailError);
+        // No falles la reserva si falla el email
+      }
+    }
 
     res.status(201).json({
       mensaje: 'Reserva creada exitosamente',
@@ -341,6 +401,43 @@ app.post('/api/admin/reportes/:id/leer', async (req, res) => {
     if (error) throw error;
     res.json({ mensaje: 'Marcado como leído', reporte: data[0] });
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Cancelar reserva por código
+app.post('/api/cancelar-por-codigo', async (req, res) => {
+  try {
+    const { codigo, motivo } = req.body;
+
+    if (!codigo) {
+      return res.status(400).json({ error: 'Código requerido' });
+    }
+
+    // Buscar la reserva por código
+    const { data: reservas, error: errorBuscar } = await supabase
+      .from('reservas')
+      .select('*')
+      .eq('codigo_cancelacion', codigo)
+      .eq('estado', 'activa');
+
+    if (errorBuscar || !reservas || reservas.length === 0) {
+      return res.status(404).json({ error: 'Código inválido o reserva ya cancelada' });
+    }
+
+    const reserva = reservas[0];
+
+    // Cancelar la reserva
+    const { error: errorCancelar } = await supabase
+      .from('reservas')
+      .update({ estado: 'cancelada' })
+      .eq('id', reserva.id);
+
+    if (errorCancelar) throw errorCancelar;
+
+    res.json({ mensaje: 'Reserva cancelada exitosamente', reserva_id: reserva.id });
+  } catch (error) {
+    console.error('Error:', error);
     res.status(500).json({ error: error.message });
   }
 });
