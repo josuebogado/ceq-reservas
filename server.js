@@ -2,10 +2,16 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
-const { Resend } = require('resend');
+const nodemailer = require('nodemailer');
 
-// Configurar Resend
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Configurar Nodemailer con Gmail
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER || 'josuebogado321@gmail.com',
+    pass: process.env.EMAIL_PASS || 'tu-app-password'
+  }
+});
 
 // Generar código único
 function generarCodigo() {
@@ -180,10 +186,10 @@ app.post('/api/reservas', async (req, res) => {
     const [emailUser] = contacto.split('|').map(c => c.trim());
     const espacios_map = { 1: 'Altillo', 2: 'Sala de Reuniones', 3: 'Frente' };
     
-    if (resend && process.env.RESEND_API_KEY) {
+    if (transporter) {
       try {
-        await resend.emails.send({
-          from: 'onboarding@resend.dev',
+        await transporter.sendMail({
+          from: process.env.EMAIL_USER || 'josuebogado321@gmail.com',
           to: emailUser,
           subject: '✓ Tu reserva en Centro de Estudiantes de Química',
           html: `
