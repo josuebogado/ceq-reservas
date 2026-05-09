@@ -190,6 +190,7 @@ app.get('/api/admin/reservas', async (req, res) => {
         fecha,
         hora_inicio,
         hora_fin,
+        motivo,
         estado,
         created_at
       `)
