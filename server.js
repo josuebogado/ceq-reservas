@@ -186,7 +186,7 @@ app.post('/api/reservas', async (req, res) => {
       try {
         await sgMail.send({
           to: emailUser,
-          from: 'josuebogado321@gmail.com',
+          from: 'noreply@onrender.com',
           subject: '✓ Tu reserva en Centro de Estudiantes de Química',
           html: `
             <h2>Reserva Confirmada</h2>
