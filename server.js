@@ -167,6 +167,42 @@ app.get('/api/reservas', async (req, res) => {
 });
 
 // =========================
+// ESTADISTICAS
+// =========================
+
+app.get('/api/estadisticas', async (req, res) => {
+
+  try {
+
+    const { data, error } = await supabase
+
+      .from('reservas')
+
+      .select('*')
+
+      .eq('estado', 'activa');
+
+    if (error) throw error;
+
+    res.json({
+
+      reservas_activas: data.length
+
+    });
+
+  } catch (error) {
+
+    res.status(500).json({
+
+      error: error.message
+
+    });
+
+  }
+
+});
+
+// =========================
 // CREAR RESERVA
 // =========================
 
@@ -181,20 +217,13 @@ app.post('/api/reservas', async (req, res) => {
       contacto,
       fecha,
       turno,
+      hora_inicio,
+      hora_fin,
       motivo
 
     } = req.body;
 
-    console.log('Datos recibidos:', {
-
-      espacio_id,
-      nombre_solicitante,
-      contacto,
-      fecha,
-      turno,
-      motivo
-
-    });
+    console.log('Datos recibidos:', req.body);
 
     // =========================
     // VALIDACIONES
@@ -205,8 +234,7 @@ app.post('/api/reservas', async (req, res) => {
       !espacio_id ||
       !nombre_solicitante ||
       !contacto ||
-      !fecha ||
-      !turno
+      !fecha
 
     ) {
 
@@ -236,8 +264,6 @@ app.post('/api/reservas', async (req, res) => {
 
     );
 
-    // mínimo 1 día
-
     if (diasDiferencia < 1) {
 
       return res.status(400).json({
@@ -249,8 +275,6 @@ app.post('/api/reservas', async (req, res) => {
 
     }
 
-    // máximo 14 días
-
     if (diasDiferencia > 14) {
 
       return res.status(400).json({
@@ -261,8 +285,6 @@ app.post('/api/reservas', async (req, res) => {
       });
 
     }
-
-    // no fines de semana
 
     if (
 
@@ -281,42 +303,109 @@ app.post('/api/reservas', async (req, res) => {
     }
 
     // =========================
-    // TURNOS FIJOS
+    // FRENTE → TURNOS FIJOS
     // =========================
 
-    let hora_inicio;
-    let hora_fin;
+    let inicioFinal;
+    let finFinal;
+    let turnoFinal = turno || null;
 
-    switch (turno) {
+    if (espacio_id == 3) {
 
-      case 'desayuno':
+      switch (turno) {
 
-        hora_inicio = '07:00';
-        hora_fin = '10:00';
+        case 'desayuno':
 
-        break;
+          inicioFinal = '07:00';
+          finFinal = '10:00';
 
-      case 'almuerzo':
+          break;
 
-        hora_inicio = '10:00';
-        hora_fin = '13:00';
+        case 'almuerzo':
 
-        break;
+          inicioFinal = '10:00';
+          finFinal = '13:00';
 
-      case 'merienda':
+          break;
 
-        hora_inicio = '14:00';
-        hora_fin = '18:00';
+        case 'merienda':
 
-        break;
+          inicioFinal = '14:00';
+          finFinal = '18:00';
 
-      default:
+          break;
+
+        default:
+
+          return res.status(400).json({
+
+            error: 'Turno inválido'
+
+          });
+
+      }
+
+    }
+
+    // =========================
+    // ALTILLO / SALA
+    // =========================
+
+    else {
+
+      if (!hora_inicio || !hora_fin) {
 
         return res.status(400).json({
 
-          error: 'Turno inválido'
+          error: 'Faltan horarios'
 
         });
+
+      }
+
+      inicioFinal = hora_inicio;
+      finFinal = hora_fin;
+
+    }
+
+    // =========================
+    // SUPERPOSICIÓN
+    // =========================
+
+    const {
+
+      data: existentes,
+      error: errorBusqueda
+
+    } = await supabase
+
+      .from('reservas')
+
+      .select('*')
+
+      .eq('espacio_id', espacio_id)
+
+      .eq('fecha', fecha)
+
+      .eq('estado', 'activa');
+
+    if (errorBusqueda) throw errorBusqueda;
+
+    const conflicto = existentes.some(r =>
+
+      inicioFinal < r.hora_fin &&
+      finFinal > r.hora_inicio
+
+    );
+
+    if (conflicto) {
+
+      return res.status(409).json({
+
+        error:
+          'Ese horario ya está reservado'
+
+      });
 
     }
 
@@ -345,11 +434,11 @@ app.post('/api/reservas', async (req, res) => {
 
         fecha,
 
-        turno,
+        turno: turnoFinal,
 
-        hora_inicio,
+        hora_inicio: inicioFinal,
 
-        hora_fin,
+        hora_fin: finFinal,
 
         motivo: motivo || '',
 
@@ -361,22 +450,7 @@ app.post('/api/reservas', async (req, res) => {
 
       .select();
 
-    // =========================
-    // ERROR DUPLICADO
-    // =========================
-
     if (error) {
-
-      if (error.code === '23505') {
-
-        return res.status(409).json({
-
-          error:
-            'Ese turno ya fue reservado por otra persona'
-
-        });
-
-      }
 
       console.error('Error Supabase:', error);
 
@@ -445,17 +519,9 @@ app.post('/api/reservas', async (req, res) => {
 
           <p>
 
-            <strong>Turno:</strong>
-
-            ${turno}
-
-          </p>
-
-          <p>
-
             <strong>Horario:</strong>
 
-            ${hora_inicio} - ${hora_fin}
+            ${inicioFinal} - ${finFinal}
 
           </p>
 
@@ -508,6 +574,77 @@ app.post('/api/reservas', async (req, res) => {
   } catch (error) {
 
     console.error(error);
+
+    res.status(500).json({
+
+      error: error.message
+
+    });
+
+  }
+
+});
+
+// =========================
+// CANCELAR RESERVA
+// =========================
+
+app.post('/api/cancelar-por-codigo', async (req, res) => {
+
+  try {
+
+    const { codigo } = req.body;
+
+    if (!codigo) {
+
+      return res.status(400).json({
+
+        error: 'Código requerido'
+
+      });
+
+    }
+
+    const {
+
+      data,
+      error
+
+    } = await supabase
+
+      .from('reservas')
+
+      .update({
+
+        estado: 'cancelada'
+
+      })
+
+      .eq('codigo_cancelacion', codigo)
+
+      .eq('estado', 'activa')
+
+      .select();
+
+    if (error) throw error;
+
+    if (!data.length) {
+
+      return res.status(404).json({
+
+        error: 'Reserva no encontrada'
+
+      });
+
+    }
+
+    res.json({
+
+      mensaje: 'Reserva cancelada'
+
+    });
+
+  } catch (error) {
 
     res.status(500).json({
 
