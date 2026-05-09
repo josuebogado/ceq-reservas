@@ -3,6 +3,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
+const ws = require('ws');
 const nodemailer = require('nodemailer');
 
 const app = express();
@@ -17,8 +18,17 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
 
 const supabase = createClient(
+
   SUPABASE_URL,
-  SUPABASE_KEY
+
+  SUPABASE_KEY,
+
+  {
+    realtime: {
+      transport: ws
+    }
+  }
+
 );
 
 // =========================
