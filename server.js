@@ -99,8 +99,13 @@ app.post('/api/reservas', async (req, res) => {
     
     const [horaI, minI] = hora_inicio.split(':').map(Number);
     const [horaF, minF] = hora_fin.split(':').map(Number);
-    if (horaI < 8 || horaF > 18 || horaI >= horaF) {
-      return res.status(400).json({ error: 'Horario inválido (08:00-18:00)' });
+    
+    // Para Frente: 07:00-18:00, para otros: 08:00-17:00
+    const horaMinima = espacioSeleccionado === 3 ? 7 : 8;
+    const horaMaxima = espacioSeleccionado === 3 ? 18 : 17;
+    
+    if (horaI < horaMinima || horaF > horaMaxima || horaI >= horaF) {
+      return res.status(400).json({ error: `Horario inválido (${horaMinima}:00-${horaMaxima}:00)` });
     }
     
     // VALIDACIÓN CRÍTICA: verificar solapamientos
@@ -145,7 +150,7 @@ app.post('/api/reservas', async (req, res) => {
     if (error) {
       if (error.code === '23505') {
         // Violación de UNIQUE constraint = race condition
-        return res.status(409).json({ error: 'Horario no disponible - otro usuario lo reservó justo ahora' });
+        return res.status(409).json({ error: 'Horario no disponible - otro usuario lo reservó justo ahora. Por favor, actualice la página e intente con otro horario.' });
       }
       throw error;
     }
