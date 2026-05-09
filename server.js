@@ -186,7 +186,7 @@ app.post('/api/reservas', async (req, res) => {
       try {
         await sgMail.send({
           to: emailUser,
-          from: 'reservas@ceq-una.com.ar', // Cambiar según tu dominio
+          from: 'josuebogado321@gmail.com',
           subject: '✓ Tu reserva en Centro de Estudiantes de Química',
           html: `
             <h2>Reserva Confirmada</h2>
