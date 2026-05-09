@@ -2,12 +2,10 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
-const sgMail = require('@sendgrid/mail');
+const { Resend } = require('resend');
 
-// Configurar SendGrid
-if (process.env.SENDGRID_API_KEY) {
-  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-}
+// Configurar Resend
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 // Generar código único
 function generarCodigo() {
@@ -182,10 +180,43 @@ app.post('/api/reservas', async (req, res) => {
     const [emailUser] = contacto.split('|').map(c => c.trim());
     const espacios_map = { 1: 'Altillo', 2: 'Sala de Reuniones', 3: 'Frente' };
     
-    if (sgMail && process.env.SENDGRID_API_KEY) {
+    if (resend && process.env.RESEND_API_KEY) {
       try {
-        // Emails deshabilitados por ahora
-        // await sgMail.send({...});
+        await resend.emails.send({
+          from: 'onboarding@resend.dev',
+          to: emailUser,
+          subject: '✓ Tu reserva en Centro de Estudiantes de Química',
+          html: `
+            <h2>Reserva Confirmada</h2>
+            <p>Hola <strong>${nombre_solicitante}</strong>,</p>
+            <p>Tu reserva ha sido registrada exitosamente:</p>
+            <hr>
+            <table style="border-collapse: collapse;">
+              <tr>
+                <td style="padding: 8px;"><strong>Espacio:</strong></td>
+                <td style="padding: 8px;">${espacios_map[espacio_id]}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px;"><strong>Fecha:</strong></td>
+                <td style="padding: 8px;">${new Date(fecha).toLocaleDateString('es-PY')}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px;"><strong>Horario:</strong></td>
+                <td style="padding: 8px;">${hora_inicio} - ${hora_fin}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px;"><strong>Motivo:</strong></td>
+                <td style="padding: 8px;">${motivo || 'Sin especificar'}</td>
+              </tr>
+              <tr style="background: #f0f0f0;">
+                <td style="padding: 8px;"><strong>Código de Cancelación:</strong></td>
+                <td style="padding: 8px; font-weight: bold; color: #d86060;">${codigo}</td>
+              </tr>
+            </table>
+            <hr>
+            <p><small>Guarda este código si deseas cancelar tu reserva.</small></p>
+          `
+        });
       } catch (emailError) {
         console.error('Error al enviar email:', emailError);
       }
