@@ -184,44 +184,10 @@ app.post('/api/reservas', async (req, res) => {
     
     if (sgMail && process.env.SENDGRID_API_KEY) {
       try {
-        await sgMail.send({
-          to: emailUser,
-          from: 'noreply@onrender.com',
-          subject: '✓ Tu reserva en Centro de Estudiantes de Química',
-          html: `
-            <h2>Reserva Confirmada</h2>
-            <p>Hola <strong>${nombre_solicitante}</strong>,</p>
-            <p>Tu reserva ha sido registrada exitosamente:</p>
-            <hr>
-            <table style="border-collapse: collapse;">
-              <tr>
-                <td style="padding: 8px;"><strong>Espacio:</strong></td>
-                <td style="padding: 8px;">${espacios_map[espacio_id]}</td>
-              </tr>
-              <tr>
-                <td style="padding: 8px;"><strong>Fecha:</strong></td>
-                <td style="padding: 8px;">${new Date(fecha).toLocaleDateString('es-PY')}</td>
-              </tr>
-              <tr>
-                <td style="padding: 8px;"><strong>Horario:</strong></td>
-                <td style="padding: 8px;">${hora_inicio} - ${hora_fin}</td>
-              </tr>
-              <tr>
-                <td style="padding: 8px;"><strong>Motivo:</strong></td>
-                <td style="padding: 8px;">${motivo || 'Sin especificar'}</td>
-              </tr>
-              <tr style="background: #f0f0f0;">
-                <td style="padding: 8px;"><strong>Código de Cancelación:</strong></td>
-                <td style="padding: 8px; font-weight: bold; color: #d86060;">${codigo}</td>
-              </tr>
-            </table>
-            <hr>
-            <p><small>Guarda este código si deseas cancelar tu reserva.</small></p>
-          `
-        });
+        // Emails deshabilitados por ahora
+        // await sgMail.send({...});
       } catch (emailError) {
         console.error('Error al enviar email:', emailError);
-        // No falles la reserva si falla el email
       }
     }
 
