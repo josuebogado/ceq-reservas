@@ -80,40 +80,53 @@ app.post('/api/reservas', async (req, res) => {
   try {
     const { espacio_id, nombre_solicitante, contacto, fecha, hora_inicio, hora_fin, motivo } = req.body;
     console.log('Datos recibidos:', { espacio_id, nombre_solicitante, contacto, fecha, hora_inicio, hora_fin, motivo });
+    
     if (!espacio_id || !nombre_solicitante || !contacto || !fecha || !hora_inicio || !hora_fin) {
       return res.status(400).json({ error: 'Faltan datos obligatorios' });
     }
+    
     const hoy = new Date().toISOString().split('T')[0];
     const mañana = new Date(Date.now() + 86400000).toISOString().split('T')[0];
     if (fecha < mañana) {
       return res.status(400).json({ error: 'Mínimo 1 día de anticipación' });
     }
+    
     const fechaObj = new Date(fecha);
     const diaSemana = fechaObj.getDay();
     if (diaSemana === 0 || diaSemana === 6) {
       return res.status(400).json({ error: 'No se pueden reservar fines de semana' });
     }
+    
     const [horaI, minI] = hora_inicio.split(':').map(Number);
     const [horaF, minF] = hora_fin.split(':').map(Number);
-    if (horaI < 8 || horaF > 17 || horaI >= horaF) {
-      return res.status(400).json({ error: 'Horario inválido (08:00-17:00)' });
+    if (horaI < 8 || horaF > 18 || horaI >= horaF) {
+      return res.status(400).json({ error: 'Horario inválido (08:00-18:00)' });
     }
+    
+    // VALIDACIÓN CRÍTICA: verificar solapamientos
     const { data: existentes, error: errorBuscar } = await supabase
       .from('reservas')
       .select('*')
       .eq('espacio_id', espacio_id)
       .eq('fecha', fecha)
       .eq('estado', 'activa');
+    
     if (errorBuscar) throw errorBuscar;
+    
     const hay_solapamiento = existentes.some(r => {
       const horaIniR = parseInt(r.hora_inicio.split(':')[0]);
       const horaFinR = parseInt(r.hora_fin.split(':')[0]);
       return horaI < horaFinR && horaF > horaIniR;
     });
+    
     if (hay_solapamiento) {
-      return res.status(400).json({ error: 'Horario no disponible' });
+      return res.status(409).json({ error: 'Horario no disponible - otro usuario lo reservó' });
     }
+    
+    // Generar código ANTES de insertar
     const codigo = generarCodigo();
+    
+    // Intentar insertar - si falla por UNIQUE constraint, hay race condition
     const { data: nuevaReserva, error } = await supabase
       .from('reservas')
       .insert([{
@@ -128,10 +141,19 @@ app.post('/api/reservas', async (req, res) => {
         codigo_cancelacion: codigo
       }])
       .select();
-    if (error) throw error;
+    
+    if (error) {
+      if (error.code === '23505') {
+        // Violación de UNIQUE constraint = race condition
+        return res.status(409).json({ error: 'Horario no disponible - otro usuario lo reservó justo ahora' });
+      }
+      throw error;
+    }
+    
     res.status(201).json({
       mensaje: 'Reserva creada exitosamente',
-      reserva: nuevaReserva[0]
+      reserva: nuevaReserva[0],
+      codigo: codigo
     });
   } catch (error) {
     console.error('Error:', error);
