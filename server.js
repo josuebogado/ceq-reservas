@@ -191,6 +191,7 @@ app.get('/api/admin/reservas', async (req, res) => {
         hora_inicio,
         hora_fin,
         estado,
+        motivo,
         created_at
       `)
       .order('fecha', { ascending: false });
@@ -278,6 +279,67 @@ app.get('/api/estadisticas', async (req, res) => {
       cancelaciones_totales: cancelaciones?.length || 0,
       cancelaciones_con_multa: conMulta?.length || 0
     });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Crear reporte de error
+app.post('/api/reportes', async (req, res) => {
+  try {
+    const { mensaje, url, navegador } = req.body;
+
+    if (!mensaje) {
+      return res.status(400).json({ error: 'Mensaje requerido' });
+    }
+
+    const { data, error } = await supabase
+      .from('reportes_errores')
+      .insert([{
+        mensaje,
+        url: url || '',
+        navegador: navegador || '',
+        leido: false
+      }])
+      .select();
+
+    if (error) throw error;
+
+    res.status(201).json({ mensaje: 'Reporte guardado', reporte: data[0] });
+  } catch (error) {
+    console.error('Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Obtener reportes de errores (admin)
+app.get('/api/admin/reportes', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('reportes_errores')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Marcar reporte como leído
+app.post('/api/admin/reportes/:id/leer', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const { data, error } = await supabase
+      .from('reportes_errores')
+      .update({ leido: true })
+      .eq('id', id)
+      .select();
+
+    if (error) throw error;
+    res.json({ mensaje: 'Marcado como leído', reporte: data[0] });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
